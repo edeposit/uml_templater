@@ -4,51 +4,19 @@
 # Interpreter version: python 2.7
 #
 # Imports =====================================================================
+from __future__ import absolute_import
+
 import os
-import sys
-import ast
-import imp
 import os.path
 import argparse
-import urllib
-import urllib2
 
 
-# Variables ===================================================================
+import plantuml
+import inspector
+
+
 # Functions & objects =========================================================
-def _add_import_path(path):
-    """
-    Adds new import `path` to current path list.
-    """
-    if path not in sys.path:
-        sys.path.insert(
-            0,
-            os.path.abspath(path)
-        )
-
-
-def _get_png(uml):
-    """
-    Converts PlantUML source to gif using plantuml.com demo server.
-    """
-    req = urllib2.Request(
-        "http://www.plantuml.com/plantuml/form",
-        urllib.urlencode({"text": uml})
-    )
-
-    data = urllib2.urlopen(req).read()
-
-    image = filter(
-        lambda x: "http://www.plantuml.com:80/plantuml/png/" in x and
-                  "<img" in x,
-        data.splitlines()
-    )[0]
-    image = image.split(' src="')[1].split('"')[0]
-
-    return urllib.urlopen(image).read()
-
-
-def _get_class_name(line):
+def parse_class_name(line):
     line = line.split("class")[1]
     line = line.split("{")[0]
     line = line.strip()
@@ -61,101 +29,17 @@ def _get_class_name(line):
     return line.strip().split()[0]
 
 
-def _get_data(clsn, info_dict, path):
-    """
-    Get data for given element.
-    """
-    def filter_private(tree):
-        """Filter private AST elements."""
-        return filter(lambda x: not x.name.startswith("_"), tree)
-
-    def get_func(tree):
-        """Pick functions from AST `tree`."""
-        out = []
-        tree = filter(lambda x: isinstance(x, ast.FunctionDef), tree)
-
-        for el in filter_private(tree):
-            variables = map(lambda x: x.id, el.args.args)
-            out.append("%s(%s)" % (el.name, ", ".join(variables)))
-
-        return out
-
-    def get_classes(tree):
-        """Pick classes from AST `tree`."""
-        tree = filter(lambda x: isinstance(x, ast.ClassDef), tree)
-        return map(lambda x: "class " + x.name, tree)
-
-    def get_properties(class_name, mod):
-        """Pick properties which belongs to `class_name` in module `mod`."""
-        out = []
-
-        # look into module for given class_name
-        cls = None
-        try:
-            cls = getattr(mod, class_name)
-        except AttributeError:
-            return []
-
-        # well, this is useless, but you never know..
-        if not cls:
-            return []
-
-        properties = []
-        methods = []
-        for el in dir(cls):
-            if el.startswith("_"):
-                continue
-
-            obj = getattr(cls, el)
-
-            if type(obj).__name__ == "method_descriptor":
-                methods.append("." + obj.__name__ + "()")
-            elif type(obj).__name__ == "property":
-                properties.append("." + el)
-
-        out.extend(properties)
-        out.extend(methods)
-
-        return out
-
-    out = []
-
-    # convert module path to file path
-    fn = path + "/" + info_dict["fn"]
-    if not info_dict["fn"].endswith(".py"):
-        fn += ".py"
-
-    fn = fn.replace("_​_", "__")
-
-    if not os.path.exists(fn):
-        sys.stderr.write("'%s' doesn't exists!\n" % fn)
-        return []
-
-    if info_dict["type"] in ["module", "mod"]:
-        mod = ast.parse(open(fn).read()).body
-        out.extend(get_func(mod))
-        out.extend(get_classes(mod))
-    elif info_dict["type"] in ["struct", "structure"]:
-        _add_import_path(os.path.dirname(fn))
-        mod = imp.load_source(info_dict["fn"], fn)
-        out.extend(get_properties(clsn, mod))
-    else:
-        return []
-
-    return out
-
-
 def process_uml_file(filename, path):
     data = None
     with open(filename) as f:
         data = f.read()
 
     out = []
-    class_stack = []
     class_info = {}
+    class_stack = []
     for line in data.splitlines():
         if line.strip().startswith("class"):
-            clsn = _get_class_name(line)
+            clsn = parse_class_name(line)
             class_stack.append(clsn)
             class_info[clsn] = {
                 "spacer": line.split("class")[0] + "    "
@@ -173,7 +57,11 @@ def process_uml_file(filename, path):
 
             # spacer is in class_info everytime, but rest is not
             if clsn in class_info and len(class_info[clsn].items()) > 1:
-                data = _get_data(clsn, class_info[clsn], path)
+                data = inspector.load_data_from_module(
+                    clsn,
+                    class_info[clsn],
+                    path
+                )
 
                 # apply spacer
                 data = map(lambda x: class_info[clsn]["spacer"] + x, data)
@@ -192,7 +80,7 @@ def process_uml_file(filename, path):
 
     # create image
     with open(new_filename.rsplit(".", 1)[0] + ".png", "wb") as f:
-        f.write(_get_png(uml))
+        f.write(plantuml.to_png(uml))
 
     return new_filename
 
@@ -221,7 +109,7 @@ if __name__ == '__main__':
     )
     args = parser.parse_args()
 
-    _add_import_path(args.ipath)
+    inspector.add_import_path(args.ipath)
 
     for filename in os.listdir(args.static_dir):
         filename = args.static_dir + "/" + filename

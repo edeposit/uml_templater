@@ -12,17 +12,6 @@ import imp
 
 
 # Functions & classes =========================================================
-def add_import_path(path):
-    """
-    Adds new import `path` to current path list.
-    """
-    if path not in sys.path:
-        sys.path.insert(
-            0,
-            os.path.abspath(path)
-        )
-
-
 def filter_private(tree):
     """Filter private AST elements."""
     return filter(lambda x: not x.name.startswith("_"), tree)
@@ -80,6 +69,46 @@ def get_properties(class_name, mod):
     return out
 
 
+def add_import_path(path):
+    """
+    Adds new import `path` to current path list.
+    """
+    if path not in sys.path:
+        sys.path.insert(
+            0,
+            os.path.abspath(path)
+        )
+
+
+def import_module(filename, path):
+    """
+    Import `filename` as module.
+
+    Args:
+        filename (str): Local filename.
+        path (str): Full path to the file.
+
+    Returns:
+        module obj: Imported module.
+    """
+    add_import_path(os.path.dirname(path))
+
+    # try to import module, doesn't work for packages with relative imports
+    try:
+        return imp.load_source(filename, path)
+    except ValueError:
+        pass
+
+    # handling of the 'ValueError: Attempted relative import in non-package'
+    # problem
+    import_path = os.path.dirname(os.path.dirname(path))
+    package_name = os.path.basename(os.path.dirname(path))
+    sub_package_name = os.path.splitext(os.path.basename(path))[0]
+
+    add_import_path(import_path)
+    return __import__(package_name + "." + sub_package_name)
+
+
 def load_data_from_module(clsn, info_dict, path):
     """
     Get data for given element.
@@ -104,9 +133,12 @@ def load_data_from_module(clsn, info_dict, path):
         out.extend(get_func(mod))
         out.extend(get_classes(mod))
     elif info_dict["type"] in ["struct", "structure"]:
-        add_import_path(os.path.dirname(full_path))
-        mod = imp.load_source(filename, full_path)
-        out.extend(get_properties(clsn, mod))
+        out.extend(
+            get_properties(
+                clsn,
+                import_module(filename, full_path)
+            )
+        )
     else:
         return []
 

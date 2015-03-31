@@ -71,16 +71,16 @@ def process_uml_file(filename, path):
 
         out.append(line)
 
-    uml = "\n".join(out)
     new_filename = filename.replace("template_", "")
 
-    # write new uml to new file
+    # write patched uml to new file
+    patched_uml = "\n".join(out)
     with open(new_filename, "w") as f:
-        f.write(uml)
+        f.write(patched_uml)
 
     # create image
     with open(new_filename.rsplit(".", 1)[0] + ".png", "wb") as f:
-        f.write(plantuml.to_png(uml))
+        f.write(plantuml.to_png(patched_uml))
 
     return new_filename
 

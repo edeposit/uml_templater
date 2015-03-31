@@ -40,11 +40,10 @@ def get_properties(class_name, mod):
     out = []
 
     # look into module for given class_name
-    cls = None
-    try:
-        cls = getattr(mod, class_name)
-    except AttributeError:
+    if not hasattr(mod, class_name):
         return []
+
+    cls = getattr(mod, class_name)
 
     # well, this is useless, but you never know..
     if not cls:
@@ -58,7 +57,7 @@ def get_properties(class_name, mod):
 
         obj = getattr(cls, el)
 
-        if type(obj).__name__ == "method_descriptor":
+        if type(obj).__name__ in ["instancemethod"]:
             methods.append("." + obj.__name__ + "()")
         elif type(obj).__name__ == "property":
             properties.append("." + el)
@@ -96,8 +95,9 @@ def import_module(filename, path):
     # try to import module, doesn't work for packages with relative imports
     try:
         return imp.load_source(filename, path)
-    except ValueError:
-        pass
+    except ValueError as e:
+        if "Attempted relative import in non-package" not in e:
+            raise
 
     # handling of the 'ValueError: Attempted relative import in non-package'
     # problem
@@ -106,7 +106,9 @@ def import_module(filename, path):
     sub_package_name = os.path.splitext(os.path.basename(path))[0]
 
     add_import_path(import_path)
-    return __import__(package_name + "." + sub_package_name)
+    pkg = __import__(package_name)
+
+    return getattr(pkg, sub_package_name)
 
 
 def load_data_from_module(clsn, info_dict, path):
@@ -114,11 +116,11 @@ def load_data_from_module(clsn, info_dict, path):
     Get data for given element.
     """
     out = []
-    filename = info_dict["filename"]
+    user_path = info_dict["filename"]
 
     # convert module path to file path
-    full_path = os.path.join(path, filename)
-    if not filename.endswith(".py"):
+    full_path = os.path.join(path, user_path)
+    if not user_path.endswith(".py"):
         full_path += ".py"
 
     # remove invisible unicode zero widht space character
@@ -136,7 +138,7 @@ def load_data_from_module(clsn, info_dict, path):
         out.extend(
             get_properties(
                 clsn,
-                import_module(filename, full_path)
+                import_module(user_path, full_path)
             )
         )
     else:

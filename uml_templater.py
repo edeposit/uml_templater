@@ -112,7 +112,7 @@ if __name__ == '__main__':
     inspector.add_import_path(args.ipath)
 
     for filename in os.listdir(args.static_dir):
-        filename = args.static_dir + "/" + filename
+        filename = os.path.join(args.static_dir, filename)
         if not os.path.isfile(filename):
             continue
 

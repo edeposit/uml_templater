@@ -49,7 +49,7 @@ def process_uml_file(filename, path):
         if class_stack and line.strip().startswith("$templater"):
             parsed = line.strip().split(":")
             class_info[class_stack[-1]]["type"] = parsed[1]
-            class_info[class_stack[-1]]["fn"] = parsed[2]
+            class_info[class_stack[-1]]["filename"] = parsed[2]
             continue
 
         if "}" in line and class_stack:

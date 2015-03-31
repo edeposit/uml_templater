@@ -85,26 +85,27 @@ def load_data_from_module(clsn, info_dict, path):
     Get data for given element.
     """
     out = []
+    filename = info_dict["filename"]
 
     # convert module path to file path
-    fn = path + "/" + info_dict["fn"]
-    if not info_dict["fn"].endswith(".py"):
-        fn += ".py"
+    full_path = os.path.join(path, filename)
+    if not filename.endswith(".py"):
+        full_path += ".py"
 
-    # remove invisible unicode zero space character
-    fn = fn.replace("_​_", "__")
+    # remove invisible unicode zero widht space character
+    full_path = full_path.replace("_​_", "__")
 
-    if not os.path.exists(fn):
-        sys.stderr.write("'%s' doesn't exists!\n" % fn)
+    if not os.path.exists(full_path):
+        sys.stderr.write("'%s' doesn't exists!\n" % full_path)
         return []
 
     if info_dict["type"] in ["module", "mod"]:
-        mod = ast.parse(open(fn).read()).body
+        mod = ast.parse(open(full_path).read()).body
         out.extend(get_func(mod))
         out.extend(get_classes(mod))
     elif info_dict["type"] in ["struct", "structure"]:
-        add_import_path(os.path.dirname(fn))
-        mod = imp.load_source(info_dict["fn"], fn)
+        add_import_path(os.path.dirname(full_path))
+        mod = imp.load_source(filename, full_path)
         out.extend(get_properties(clsn, mod))
     else:
         return []

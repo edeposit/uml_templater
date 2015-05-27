@@ -49,21 +49,27 @@ def get_properties(class_name, mod):
     if not cls:
         return []
 
-    properties = []
     methods = []
+    properties = []
+    static_methods = []
     for el in dir(cls):
         if el.startswith("_"):
             continue
 
         obj = getattr(cls, el)
+        name = type(obj).__name__
 
-        if type(obj).__name__ in ["instancemethod"]:
+        # rewrite to use ast module (you can't get obj. property from class)
+        if name == "instancemethod":
             methods.append("." + obj.__name__ + "()")
-        elif type(obj).__name__ == "property":
+        elif name == "function":
+            static_methods.append(class_name + "." + obj.__name__ + "()")
+        elif name == "property" or name != "method_descriptor":
             properties.append("." + el)
 
     out.extend(properties)
     out.extend(methods)
+    out.extend(static_methods)
 
     return out
 
